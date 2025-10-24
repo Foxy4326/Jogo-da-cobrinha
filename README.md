@@ -1,319 +1,262 @@
-var Snake = (function () {
+using UnityEngine;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
+using System.Collections.Generic;
 
-  const INITIAL_TAIL = 4;
-  var fixedTail = true;
+// O componente ARRaycastManager é essencial para a interação com o plano de RA.
+[RequireComponent(typeof(ARRaycastManager))]
+public class ARSNAKE_GameManager : MonoBehaviour
+{
+    // === VINCULAÇÕES NO INSPECTOR (Configurável no Unity Editor) ===
+    
+    [Header("Assets 3D e Prefabs")]
+    public GameObject snakeHeadPrefab;      // O modelo 3D da cabeça da cobra
+    public GameObject bodySegmentPrefab;    // O modelo 3D de cada segmento do corpo
+    public GameObject foodPrefab;           // O modelo 3D da comida (frutas/orbes)
+    
+    // Você deve vincular e desativar este no Inspector após o início do jogo para ocultar os planos.
+    [Header("Gerenciadores de RA")]
+    public ARPlaneManager arPlaneManager; 
 
-  var intervalID;
+    // === CONFIGURAÇÕES DE GAMEPLAY ===
+    
+    [Header("Configurações da Cobra")]
+    public float snakeSpeed = 5f;          // Velocidade de movimento
+    public float rotationSpeed = 100f;     // Velocidade de rotação (sensibilidade do toque)
+    public float distanceBetweenSegments = 0.5f; // Distância que a cabeça deve percorrer antes de mover o corpo
+    
+    [Header("Configurações da Comida")]
+    public float foodSpawnRadius = 5f;     // Raio máximo para gerar nova comida
+    public float foodSpawnHeightOffset = 0.1f; // Pequeno ajuste vertical para a comida não afundar no chão
+    
+    // === VARIÁVEIS INTERNAS DO JOGO ===
+    
+    private ARRaycastManager arRaycastManager;
+    private static List<ARRaycastHit> hits = new List<ARRaycastHit>();
+    
+    private GameObject snakeHeadInstance;
+    private List<GameObject> bodySegments = new List<GameObject>();
+    private Vector3 lastHeadPosition; 
+    private bool gameStarted = false;
+    private GameObject currentFoodInstance;
+    
+    // === UNITY LIFECYCLE ===
 
-  var tileCount = 10;
-  var gridSize = 400/tileCount;
+    void Awake()
+    {
+        // Obtém o componente ARRaycastManager que deve estar no mesmo objeto
+        arRaycastManager = GetComponent<ARRaycastManager>();
+    }
 
-  const INITIAL_PLAYER = { x: Math.floor(tileCount / 2), y: Math.floor(tileCount / 2) };
-
-  var velocity = { x:0, y:0 };
-  var player = { x: INITIAL_PLAYER.x, y: INITIAL_PLAYER.y };
-
-  var walls = false;
-
-  var fruit = { x:1, y:1 };
-
-  var trail = [];
-  var tail = INITIAL_TAIL;
-
-  var reward = 0;
-  var points = 0;
-  var pointsMax = 0;
-
-  var ActionEnum = { 'none':0, 'up':1, 'down':2, 'left':3, 'right':4 };
-  Object.freeze(ActionEnum);
-  var lastAction = ActionEnum.none;
-
-  function setup () {
-    canv = document.getElementById('gc');
-    ctx = canv.getContext('2d');
-
-    game.reset();
-  }
-
-  var game = {
-
-    reset: function () {
-      ctx.fillStyle = 'grey';
-      ctx.fillRect(0, 0, canv.width, canv.height);
-
-      tail = INITIAL_TAIL;
-      points = 0;
-      velocity.x = 0;
-      velocity.y = 0;
-      player.x = INITIAL_PLAYER.x;
-      player.y = INITIAL_PLAYER.y;
-      // this.RandomFruit();
-      reward = -1;
-
-      lastAction = ActionEnum.none;
-
-      trail = [];
-      trail.push({ x: player.x, y: player.y });
-      // for(var i=0; i<tail; i++) trail.push({ x: player.x, y: player.y });
-    },
-
-    action: {
-      up: function () {
-        if (lastAction != ActionEnum.down){
-          velocity.x = 0;
-          velocity.y = -1;
+    void Update()
+    {
+        if (!gameStarted)
+        {
+            HandleGameStartTouch();
         }
-      },
-      down: function () {
-        if (lastAction != ActionEnum.up){
-          velocity.x = 0;
-          velocity.y = 1;
+        else
+        {
+            // O jogo está rodando:
+            HandleSnakeInputAndMovement();
+            HandleBodyTracking();
         }
-      },
-      left: function () {
-        if (lastAction != ActionEnum.right){
-          velocity.x = -1;
-          velocity.y = 0;
-        }
-      },
-      right: function () {
-        if (lastAction != ActionEnum.left){
-          velocity.x = 1;
-          velocity.y = 0;
-        }
-      }
-    },
+    }
 
-    RandomFruit: function () {
-      if(walls){
-        fruit.x = 1+Math.floor(Math.random() * (tileCount-2));
-        fruit.y = 1+Math.floor(Math.random() * (tileCount-2));
-      }
-      else {
-        fruit.x = Math.floor(Math.random() * tileCount);
-        fruit.y = Math.floor(Math.random() * tileCount);
-      }
-    },
+    // --- MÉTODOS DE INÍCIO DO JOGO (AR FOUNDATION) ---
+    
+    private void HandleGameStartTouch()
+    {
+        // Espera por um toque e se a cobra já existe, não faz nada
+        if (snakeHeadInstance != null || Input.touchCount == 0)
+            return;
 
-    log: function () {
-      console.log('====================');
-      console.log('x:' + player.x + ', y:' + player.y);
-      console.log('tail:' + tail + ', trail.length:' + trail.length);
-    },
+        Touch touch = Input.GetTouch(0);
 
-    loop: function () {
-
-      reward = -0.1;
-
-      function DontHitWall () {
-        if(player.x < 0) player.x = tileCount-1;
-        if(player.x >= tileCount) player.x = 0;
-        if(player.y < 0) player.y = tileCount-1;
-        if(player.y >= tileCount) player.y = 0;
-      }
-      function HitWall () {
-        if(player.x < 1) game.reset();
-        if(player.x > tileCount-2) game.reset();
-        if(player.y < 1) game.reset();
-        if(player.y > tileCount-2) game.reset();
-
-        ctx.fillStyle = 'grey';
-        ctx.fillRect(0,0,gridSize-1,canv.height);
-        ctx.fillRect(0,0,canv.width,gridSize-1);
-        ctx.fillRect(canv.width-gridSize+1,0,gridSize,canv.height);
-        ctx.fillRect(0, canv.height-gridSize+1,canv.width,gridSize);
-      }
-
-      var stopped = velocity.x == 0 && velocity.y == 0;
-
-      player.x += velocity.x;
-      player.y += velocity.y;
-
-      if (velocity.x == 0 && velocity.y == -1) lastAction = ActionEnum.up;
-      if (velocity.x == 0 && velocity.y == 1) lastAction = ActionEnum.down;
-      if (velocity.x == -1 && velocity.y == 0) lastAction = ActionEnum.left;
-      if (velocity.x == 1 && velocity.y == 0) lastAction = ActionEnum.right;
-
-      ctx.fillStyle = 'rgba(40,40,40,0.8)';
-      ctx.fillRect(0,0,canv.width,canv.height);
-
-      if(walls) HitWall();
-      else DontHitWall();
-
-      // game.log();
-
-      if (!stopped){
-        trail.push({x:player.x, y:player.y});
-        while(trail.length > tail) trail.shift();
-      }
-
-      if(!stopped) {
-        ctx.fillStyle = 'rgba(200,200,200,0.2)';
-        ctx.font = "small-caps 14px Helvetica";
-        ctx.fillText("(esc) reset", 24, 356);
-        ctx.fillText("(space) pause", 24, 374);
-      }
-
-      ctx.fillStyle = 'green';
-      for(var i=0; i<trail.length-1; i++) {
-        ctx.fillRect(trail[i].x * gridSize+1, trail[i].y * gridSize+1, gridSize-2, gridSize-2);
-
-        // console.debug(i + ' => player:' + player.x, player.y + ', trail:' + trail[i].x, trail[i].y);
-        if (!stopped && trail[i].x == player.x && trail[i].y == player.y){
-          game.reset();
-        }
-        ctx.fillStyle = 'lime';
-      }
-      ctx.fillRect(trail[trail.length-1].x * gridSize+1, trail[trail.length-1].y * gridSize+1, gridSize-2, gridSize-2);
-
-      if (player.x == fruit.x && player.y == fruit.y) {
-        if(!fixedTail) tail++;
-        points++;
-        if(points > pointsMax) pointsMax = points;
-        reward = 1;
-        game.RandomFruit();
-        // make sure new fruit didn't spawn in snake tail
-        while((function () {
-          for(var i=0; i<trail.length; i++) {
-            if (trail[i].x == fruit.x && trail[i].y == fruit.y) {
-              game.RandomFruit();
-              return true;
+        // Se o toque começou
+        if (touch.phase == TouchPhase.Began)
+        {
+            // Tenta fazer um Raycast a partir do toque em um plano detectado
+            if (arRaycastManager.Raycast(touch.position, hits, TrackableType.PlaneWithinPolygon))
+            {
+                // Se acertar um plano, inicia a cobra
+                Pose hitPose = hits[0].pose;
+                StartSnakeGame(hitPose.position);
             }
-          }
-          return false;
-        })());
-      }
-
-      ctx.fillStyle = 'red';
-      ctx.fillRect(fruit.x * gridSize+1, fruit.y * gridSize+1, gridSize-2, gridSize-2);
-
-      if(stopped) {
-        ctx.fillStyle = 'rgba(250,250,250,0.8)';
-        ctx.font = "small-caps bold 14px Helvetica";
-        ctx.fillText("press ARROW KEYS to START...", 24, 374);
-      }
-
-      ctx.fillStyle = 'white';
-      ctx.font = "bold small-caps 16px Helvetica";
-      ctx.fillText("points: " + points, 288, 40);
-      ctx.fillText("top: " + pointsMax, 292, 60);
-
-      return reward;
-    }
-  }
-
-  function keyPush (evt) {
-    switch(evt.keyCode) {
-      case 37: //left
-      game.action.left();
-      evt.preventDefault();
-      break;
-
-      case 38: //up
-      game.action.up();
-      evt.preventDefault();
-      break;
-
-      case 39: //right
-      game.action.right();
-      evt.preventDefault();
-      break;
-
-      case 40: //down
-      game.action.down();
-      evt.preventDefault();
-      break;
-
-      case 32: //space
-      Snake.pause();
-      evt.preventDefault();
-      break;
-
-      case 27: //esc
-      game.reset();
-      evt.preventDefault();
-      break;
-    }
-  }
-
-  return {
-    start: function (fps = 15) {
-      window.onload = setup;
-      intervalID = setInterval(game.loop, 1000 / fps);
-    },
-
-    loop: game.loop,
-
-    reset: game.reset,
-
-    stop: function () {
-      clearInterval(intervalID);
-    },
-
-    setup: {
-      keyboard: function (state) {
-        if (state) {
-          document.addEventListener('keydown', keyPush);
-        } else {
-          document.removeEventListener('keydown', keyPush);
         }
-      },
-      wall: function (state) {
-        walls = state;
-      },
-      tileCount: function (size) {
-        tileCount = size;
-        gridSize = 400 / tileCount;
-      },
-      fixedTail: function (state) {
-        fixedTail = state;
-      }
-    },
-
-    action: function (act) {
-      switch(act) {
-        case 'left':
-          game.action.left();
-          break;
-
-        case 'up':
-          game.action.up();
-          break;
-
-        case 'right':
-          game.action.right();
-          break;
-
-        case 'down':
-          game.action.down();
-          break;
-      }
-    },
-
-    pause: function () {
-      velocity.x = 0;
-      velocity.y = 0;
-    },
-
-    clearTopScore: function () {
-      pointsMax = 0;
-    },
-
-    data: {
-      player: player,
-      fruit: fruit,
-      trail: function () {
-        return trail;
-      }
-    },
-
-    info: {
-      tileCount: tileCount
     }
-  };
 
-})();
+    private void StartSnakeGame(Vector3 startPosition)
+    {
+        // 1. Instancia a Cabeça da Cobra
+        snakeHeadInstance = Instantiate(snakeHeadPrefab, startPosition, Quaternion.identity);
+        lastHeadPosition = startPosition;
+        gameStarted = true;
+        
+        // 2. Configura a Colisão na Cabeça (Manual para protótipo)
+        Rigidbody rb = snakeHeadInstance.AddComponent<Rigidbody>();
+        rb.isKinematic = true; 
+        SphereCollider collider = snakeHeadInstance.AddComponent<SphereCollider>();
+        collider.isTrigger = true;
+        
+        // Adiciona este script de novo à cabeça para que o OnTriggerEnter funcione nela.
+        // Isso é uma gambiarra, o certo é ter um script separado para a cabeça, mas atende o pedido de ser "completo/único".
+        snakeHeadInstance.AddComponent<TriggerHandler>().gameManager = this;
+        
+        // 3. Desativa o visualizador de planos
+        if (arPlaneManager != null)
+        {
+            arPlaneManager.enabled = false;
+            foreach (var plane in arPlaneManager.trackables)
+            {
+                plane.gameObject.SetActive(false);
+            }
+        }
 
-Snake.start(8);
-Snake.setup.keyboard(true);
-Snake.setup.fixedTail(false);
+        // 4. Inicia o Jogo
+        AddSegment(); // Adiciona o primeiro segmento
+        SpawnFood();
+    }
+    
+    // --- MÉTODOS DE JOGABILIDADE ---
+
+    private void HandleSnakeInputAndMovement()
+    {
+        // 1. Movimento Constante para Frente
+        snakeHeadInstance.transform.Translate(Vector3.forward * snakeSpeed * Time.deltaTime);
+
+        // 2. Rotação (Baseada no arrasto do toque)
+        if (Input.touchCount > 0)
+        {
+            Touch touch = Input.GetTouch(0);
+
+            if (touch.phase == TouchPhase.Moved)
+            {
+                // Usa a mudança horizontal do toque para girar a cobra
+                float rotationAmount = touch.deltaPosition.x * Time.deltaTime * rotationSpeed;
+                snakeHeadInstance.transform.Rotate(Vector3.up, rotationAmount);
+            }
+        }
+    }
+
+    private void HandleBodyTracking()
+    {
+        // Verifica se a cabeça se moveu o suficiente (maior que 'distanceBetweenSegments')
+        if (Vector3.Distance(snakeHeadInstance.transform.position, lastHeadPosition) > distanceBetweenSegments)
+        {
+            // Move todos os segmentos, do último ao primeiro, para a posição do anterior
+            for (int i = bodySegments.Count - 1; i > 0; i--)
+            {
+                bodySegments[i].transform.position = bodySegments[i - 1].transform.position;
+            }
+            
+            // Move o primeiro segmento para a posição anterior da cabeça
+            if (bodySegments.Count > 0)
+            {
+                bodySegments[0].transform.position = lastHeadPosition;
+            }
+
+            // Atualiza a posição de referência
+            lastHeadPosition = snakeHeadInstance.transform.position;
+        }
+    }
+
+    public void AddSegment()
+    {
+        GameObject newSegment;
+        Vector3 spawnPos = Vector3.zero;
+
+        if (bodySegments.Count == 0)
+        {
+            spawnPos = snakeHeadInstance.transform.position;
+        }
+        else
+        {
+            GameObject lastSegment = bodySegments[bodySegments.Count - 1];
+            spawnPos = lastSegment.transform.position;
+        }
+        
+        newSegment = Instantiate(bodySegmentPrefab, spawnPos, Quaternion.identity);
+        
+        // Configuração de colisão para o segmento (IMPORTANTE: Tag "Body")
+        newSegment.tag = "Body";
+        if (newSegment.GetComponent<Collider>() == null)
+        {
+            newSegment.AddComponent<BoxCollider>().isTrigger = true;
+        }
+        
+        bodySegments.Add(newSegment);
+    }
+    
+    private void SpawnFood()
+    {
+        if (currentFoodInstance != null) return;
+
+        // Gera um ponto aleatório em um círculo no plano XZ em torno da cobra
+        Vector2 randomCircle = Random.insideUnitCircle.normalized * Random.Range(1f, foodSpawnRadius);
+        Vector3 spawnPosition = snakeHeadInstance.transform.position + new Vector3(randomCircle.x, 0, randomCircle.y);
+        
+        // Ajusta a altura (Y) para que a comida flutue um pouco acima do plano
+        spawnPosition.y = snakeHeadInstance.transform.position.y + foodSpawnHeightOffset; 
+
+        currentFoodInstance = Instantiate(foodPrefab, spawnPosition, Quaternion.identity);
+        currentFoodInstance.tag = "Food";
+        
+        if (currentFoodInstance.GetComponent<Collider>() == null)
+        {
+             currentFoodInstance.AddComponent<SphereCollider>().isTrigger = true;
+        }
+    }
+
+    // Este é o método que será chamado quando a cabeça da cobra colidir com algo.
+    public void HandleCollision(Collider other)
+    {
+        if (!gameStarted) return;
+        
+        // ** 1. Colisão com a Comida **
+        if (other.CompareTag("Food"))
+        {
+            Destroy(other.gameObject);
+            currentFoodInstance = null;
+            AddSegment(); 
+            SpawnFood(); 
+            snakeSpeed += 0.2f; // Opcional: Aumenta a velocidade
+            Debug.Log("Comida coletada! Tamanho: " + bodySegments.Count);
+        }
+        
+        // ** 2. Colisão com o Corpo (Game Over)**
+        else if (other.CompareTag("Body"))
+        {
+            GameOver();
+        }
+    }
+    
+    private void GameOver()
+    {
+        gameStarted = false;
+        snakeSpeed = 0f;
+        
+        Debug.LogWarning("GAME OVER! Sua pontuação: " + (bodySegments.Count - 1));
+        
+        // Lógica de UI de Game Over
+    }
+}
+
+
+// === COMPONENTE AUXILIAR PARA COLISÃO ===
+// O método OnTriggerEnter só funciona no objeto onde o script está anexado.
+// Como o GameManager está anexado a um objeto vazio, precisamos de um script
+// na cabeça da cobra para "encaminhar" o evento de colisão para o GameManager.
+
+public class TriggerHandler : MonoBehaviour
+{
+    public ARSNAKE_GameManager gameManager;
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (gameManager != null)
+        {
+            // Encaminha a colisão para o método centralizado no GameManager
+            gameManager.HandleCollision(other);
+        }
+    }
+}
