@@ -1,189 +1,189 @@
 using UnityEngine;
-using UnityEngine.XR.ARFoundation;
-using UnityEngine.XR.ARSubsystems;
 using System.Collections.Generic;
 
-// O componente ARRaycastManager é essencial para a interação com o plano de RA.
-[RequireComponent(typeof(ARRaycastManager))]
-public class ARSNAKE_GameManager : MonoBehaviour
+public class SNAKE_GameManager : MonoBehaviour
 {
-    // === VINCULAÇÕES NO INSPECTOR (Configurável no Unity Editor) ===
-
     [Header("Assets 3D e Prefabs")]
-    public GameObject snakeHeadPrefab;      // O modelo 3D da cabeça da cobra
-    public GameObject bodySegmentPrefab;    // O modelo 3D de cada segmento do corpo
-    public GameObject foodPrefab;           // O modelo 3D da comida (frutas/orbes)
-
-    // Você deve vincular e desativar este no Inspector após o início do jogo para ocultar os planos.
-    [Header("Gerenciadores de RA")]
-    public ARPlaneManager arPlaneManager;
-
-    // === CONFIGURAÇÕES DE GAMEPLAY ===
+    public GameObject snakeHeadPrefab;
+    public GameObject bodySegmentPrefab;
+    public GameObject foodPrefab;
+    public GameObject groundPlane;
 
     [Header("Configurações da Cobra")]
-    public float snakeSpeed = 5f;          // Velocidade de movimento
-    public float rotationSpeed = 100f;     // Velocidade de rotação (sensibilidade do toque)
-    public float distanceBetweenSegments = 0.5f; // Distância que a cabeça deve percorrer antes de mover o corpo
+    public float snakeSpeed = 5f;
+    public float rotationSpeed = 100f;
+    public float distanceBetweenSegments = 0.5f;
 
     [Header("Configurações da Comida")]
-    public float foodSpawnRadius = 5f;     // Raio máximo para gerar nova comida
-    public float foodSpawnHeightOffset = 0.1f; // Pequeno ajuste vertical para a comida não afundar no chão
+    public float foodSpawnRadius = 5f;
+    public float foodSpawnHeightOffset = 0.1f;
 
-    // === VARIÁVEIS INTERNAS DO JOGO ===
+    [Header("Configurações de Controle")]
+    public bool useKeyboard = true; // Teclado para Web, Toque para Mobile
 
-    private ARRaycastManager arRaycastManager;
-    private static List<ARRaycastHit> hits = new List<ARRaycastHit>();
-
+    // Variáveis do jogo
     private GameObject snakeHeadInstance;
     private List<GameObject> bodySegments = new List<GameObject>();
     private Vector3 lastHeadPosition;
     private bool gameStarted = false;
     private GameObject currentFoodInstance;
+    private float groundSize;
 
-    // === UNITY LIFECYCLE ===
-
-    void Awake()
+    void Start()
     {
-        // Obtém o componente ARRaycastManager que deve estar no mesmo objeto
-        arRaycastManager = GetComponent<ARRaycastManager>();
+        InitializeGame();
     }
 
     void Update()
     {
         if (!gameStarted)
         {
-            HandleGameStartTouch();
+            HandleGameStart();
         }
         else
         {
-            // O jogo está rodando:
             HandleSnakeInputAndMovement();
             HandleBodyTracking();
+            CheckBoundaries();
         }
     }
 
-    // --- MÉTODOS DE INÍCIO DO JOGO (AR FOUNDATION) ---
-
-    private void HandleGameStartTouch()
+    private void InitializeGame()
     {
-        // Espera por um toque e se a cobra já existe, não faz nada
-        if (snakeHeadInstance != null || Input.touchCount == 0)
-            return;
-
-        Touch touch = Input.GetTouch(0);
-
-        // Se o toque começou
-        if (touch.phase == TouchPhase.Began)
+        // Configura o tamanho do terreno
+        if (groundPlane != null)
         {
-            // Tenta fazer um Raycast a partir do toque em um plano detectado
-            if (arRaycastManager.Raycast(touch.position, hits, TrackableType.PlaneWithinPolygon))
-            {
-                // Se acertar um plano, inicia a cobra
-                Pose hitPose = hits[0].pose;
-                StartSnakeGame(hitPose.position);
-            }
+            groundSize = groundPlane.transform.localScale.x * 5f; // Assume plane scale 10x10
+        }
+        else
+        {
+            groundSize = 20f;
+        }
+
+        Debug.Log("Pressione ESPAÇO para iniciar o jogo");
+    }
+
+    private void HandleGameStart()
+    {
+        if (Input.GetKeyDown(KeyCode.Space) && snakeHeadInstance == null)
+        {
+            StartSnakeGame(Vector3.zero);
         }
     }
 
     private void StartSnakeGame(Vector3 startPosition)
     {
-        // 1. Instancia a Cabeça da Cobra
         snakeHeadInstance = Instantiate(snakeHeadPrefab, startPosition, Quaternion.identity);
         lastHeadPosition = startPosition;
         gameStarted = true;
 
-        // 2. Configura a Colisão na Cabeça (Manual para protótipo)
-        Rigidbody rb = snakeHeadInstance.AddComponent<Rigidbody>();
-        rb.isKinematic = true;
-        SphereCollider collider = snakeHeadInstance.AddComponent<SphereCollider>();
-        collider.isTrigger = true;
+        // Configura componentes físicos
+        SetupSnakeHead();
 
-        // ESTE É O COMPONENTE DELEGAR O EVENTO DE COLISÃO
-        // ANEXAMOS A CLASSE DELEGADA (AGORA ANINHADA) À CABEÇA DA COBRA
-        CollisionTriggerDelegate triggerDelegate = snakeHeadInstance.AddComponent<CollisionTriggerDelegate>();
-        triggerDelegate.gameManager = this; // Vincula o GameManager à nova instância de colisão
-
-        // 3. Desativa o visualizador de planos
-        if (arPlaneManager != null)
-        {
-            arPlaneManager.enabled = false;
-            foreach (var plane in arPlaneManager.trackables)
-            {
-                plane.gameObject.SetActive(false);
-            }
-        }
-
-        // 4. Inicia o Jogo
-        AddSegment(); // Adiciona o primeiro segmento
+        // Inicia o jogo
+        AddSegment();
         SpawnFood();
+
+        Debug.Log("Jogo Iniciado! Use A/D ou ←/→ para girar");
     }
 
-    // --- MÉTODOS DE JOGABILIDADE ---
+    private void SetupSnakeHead()
+    {
+        Rigidbody rb = snakeHeadInstance.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        
+        SphereCollider collider = snakeHeadInstance.AddComponent<SphereCollider>();
+        collider.isTrigger = true;
+        collider.radius = 0.2f;
+
+        // Componente de colisão
+        CollisionTriggerDelegate triggerDelegate = snakeHeadInstance.AddComponent<CollisionTriggerDelegate>();
+        triggerDelegate.gameManager = this;
+    }
 
     private void HandleSnakeInputAndMovement()
     {
-        // 1. Movimento Constante para Frente
+        // Movimento constante para frente
         snakeHeadInstance.transform.Translate(Vector3.forward * snakeSpeed * Time.deltaTime);
 
-        // 2. Rotação (Baseada no arrasto do toque)
-        if (Input.touchCount > 0)
-        {
-            Touch touch = Input.GetTouch(0);
+        // Controles - Web (Teclado) e Mobile (Toque)
+        float rotationInput = 0f;
 
-            if (touch.phase == TouchPhase.Moved)
+        if (useKeyboard)
+        {
+            // Controle por teclado
+            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
+                rotationInput = -1f;
+            else if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
+                rotationInput = 1f;
+        }
+        else
+        {
+            // Controle por toque (mobile)
+            if (Input.touchCount > 0)
             {
-                // Usa a mudança horizontal do toque para girar a cobra
-                float rotationAmount = touch.deltaPosition.x * Time.deltaTime * rotationSpeed;
-                snakeHeadInstance.transform.Rotate(Vector3.up, rotationAmount);
+                Touch touch = Input.GetTouch(0);
+                if (touch.phase == TouchPhase.Moved)
+                {
+                    rotationInput = touch.deltaPosition.x * 0.1f;
+                }
             }
+        }
+
+        // Aplica rotação
+        if (rotationInput != 0f)
+        {
+            float rotationAmount = rotationInput * rotationSpeed * Time.deltaTime;
+            snakeHeadInstance.transform.Rotate(Vector3.up, rotationAmount);
         }
     }
 
     private void HandleBodyTracking()
     {
-        // Verifica se a cabeça se moveu o suficiente (maior que 'distanceBetweenSegments')
         if (Vector3.Distance(snakeHeadInstance.transform.position, lastHeadPosition) > distanceBetweenSegments)
         {
-            // Move todos os segmentos, do último ao primeiro, para a posição do anterior
             for (int i = bodySegments.Count - 1; i > 0; i--)
             {
                 bodySegments[i].transform.position = bodySegments[i - 1].transform.position;
+                bodySegments[i].transform.rotation = bodySegments[i - 1].transform.rotation;
             }
 
-            // Move o primeiro segmento para a posição anterior da cabeça
             if (bodySegments.Count > 0)
             {
                 bodySegments[0].transform.position = lastHeadPosition;
+                bodySegments[0].transform.rotation = snakeHeadInstance.transform.rotation;
             }
 
-            // Atualiza a posição de referência
             lastHeadPosition = snakeHeadInstance.transform.position;
+        }
+    }
+
+    private void CheckBoundaries()
+    {
+        Vector3 headPosition = snakeHeadInstance.transform.position;
+        
+        // Verifica se saiu dos limites do terreno
+        if (Mathf.Abs(headPosition.x) > groundSize/2 || Mathf.Abs(headPosition.z) > groundSize/2)
+        {
+            GameOver();
         }
     }
 
     public void AddSegment()
     {
-        GameObject newSegment;
-        Vector3 spawnPos = Vector3.zero;
+        Vector3 spawnPos = bodySegments.Count == 0 ? 
+            snakeHeadInstance.transform.position : 
+            bodySegments[bodySegments.Count - 1].transform.position;
 
-        if (bodySegments.Count == 0)
-        {
-            spawnPos = snakeHeadInstance.transform.position;
-        }
-        else
-        {
-            GameObject lastSegment = bodySegments[bodySegments.Count - 1];
-            spawnPos = lastSegment.transform.position;
-        }
-
-        newSegment = Instantiate(bodySegmentPrefab, spawnPos, Quaternion.identity);
-
-        // Configuração de colisão para o segmento (IMPORTANTE: Tag "Body")
+        GameObject newSegment = Instantiate(bodySegmentPrefab, spawnPos, Quaternion.identity);
+        
+        // Configura colisão
         newSegment.tag = "Body";
-        if (newSegment.GetComponent<Collider>() == null)
-        {
-            newSegment.AddComponent<BoxCollider>().isTrigger = true;
-        }
+        BoxCollider segmentCollider = newSegment.GetComponent<BoxCollider>();
+        if (segmentCollider == null)
+            segmentCollider = newSegment.AddComponent<BoxCollider>();
+        segmentCollider.isTrigger = true;
 
         bodySegments.Add(newSegment);
     }
@@ -192,39 +192,47 @@ public class ARSNAKE_GameManager : MonoBehaviour
     {
         if (currentFoodInstance != null) return;
 
-        // Gera um ponto aleatório em um círculo no plano XZ em torno da cobra
-        Vector2 randomCircle = Random.insideUnitCircle.normalized * Random.Range(1f, foodSpawnRadius);
-        Vector3 spawnPosition = snakeHeadInstance.transform.position + new Vector3(randomCircle.x, 0, randomCircle.y);
+        Vector3 spawnPosition;
+        int attempts = 0;
+        bool validPosition = false;
 
-        // Ajusta a altura (Y) para que a comida flutue um pouco acima do plano
-        spawnPosition.y = snakeHeadInstance.transform.position.y + foodSpawnHeightOffset;
+        // Tenta encontrar uma posição válida
+        do
+        {
+            Vector2 randomCircle = Random.insideUnitCircle.normalized * Random.Range(2f, foodSpawnRadius);
+            spawnPosition = new Vector3(randomCircle.x, foodSpawnHeightOffset, randomCircle.y);
+            
+            // Verifica se não está muito perto da cobra
+            float distanceToSnake = Vector3.Distance(spawnPosition, snakeHeadInstance.transform.position);
+            validPosition = distanceToSnake > 3f;
+            
+            attempts++;
+        } while (!validPosition && attempts < 10);
 
         currentFoodInstance = Instantiate(foodPrefab, spawnPosition, Quaternion.identity);
         currentFoodInstance.tag = "Food";
 
-        if (currentFoodInstance.GetComponent<Collider>() == null)
-        {
-             currentFoodInstance.AddComponent<SphereCollider>().isTrigger = true;
-        }
+        // Configura colisão da comida
+        SphereCollider foodCollider = currentFoodInstance.GetComponent<SphereCollider>();
+        if (foodCollider == null)
+            foodCollider = currentFoodInstance.AddComponent<SphereCollider>();
+        foodCollider.isTrigger = true;
+        foodCollider.radius = 0.3f;
     }
 
-    // Este é o método que será chamado quando a cabeça da cobra colidir com algo.
     public void HandleCollision(Collider other)
     {
         if (!gameStarted) return;
 
-        // ** 1. Colisão com a Comida **
         if (other.CompareTag("Food"))
         {
             Destroy(other.gameObject);
             currentFoodInstance = null;
             AddSegment();
             SpawnFood();
-            snakeSpeed += 0.2f; // Opcional: Aumenta a velocidade
-            Debug.Log("Comida coletada! Tamanho: " + bodySegments.Count);
+            snakeSpeed += 0.1f; // Aumento gradual de velocidade
+            Debug.Log($"Comida coletada! Tamanho: {bodySegments.Count - 1}");
         }
-
-        // ** 2. Colisão com o Corpo (Game Over)**
         else if (other.CompareTag("Body"))
         {
             GameOver();
@@ -236,27 +244,30 @@ public class ARSNAKE_GameManager : MonoBehaviour
         gameStarted = false;
         snakeSpeed = 0f;
 
-        Debug.LogWarning("GAME OVER! Sua pontuação: " + (bodySegments.Count - 1));
+        int score = bodySegments.Count - 1;
+        Debug.LogWarning($"GAME OVER! Pontuação: {score}");
 
-        // Lógica de UI de Game Over
+        // Opcional: Mostrar UI de game over
+        Invoke("RestartGame", 3f);
     }
 
-
-    // === CLASSE DELEGADA ANINHADA PARA LIDAR COM COLISÃO (ÚNICA FORMA DE FAZER TUDO EM 1 ARQUIVO) ===
-    // Esta classe deve ser anexada à cabeça da cobra (snakeHeadInstance) para pegar o evento OnTriggerEnter.
-    // O Unity permite que classes MonoBehaviour sejam definidas DENTRO da classe principal (como aninhadas),
-    // o que resolve o problema de ter duas classes MonoBehaviour separadas.
-    public class CollisionTriggerDelegate : MonoBehaviour
+    public void RestartGame()
     {
-        public ARSNAKE_GameManager gameManager; // O GameManager é público para ser vinculado
-
-        private void OnTriggerEnter(Collider other)
+        // Limpa objetos antigos
+        if (snakeHeadInstance != null) Destroy(snakeHeadInstance);
+        foreach (var segment in bodySegments)
         {
-            if (gameManager != null)
-            {
-                // Encaminha a colisão para o método centralizado no GameManager
-                gameManager.HandleCollision(other);
-            }
+            if (segment != null) Destroy(segment);
         }
+        if (currentFoodInstance != null) Destroy(currentFoodInstance);
+
+        // Reseta variáveis
+        bodySegments.Clear();
+        gameStarted = false;
+        snakeSpeed = 5f;
+        currentFoodInstance = null;
+        snakeHeadInstance = null;
+
+        Debug.Log("Pressione ESPAÇO para jogar novamente");
     }
 }
