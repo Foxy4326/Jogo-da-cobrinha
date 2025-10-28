@@ -20,6 +20,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            touch-action: none;
         }
 
         #gameContainer {
@@ -205,6 +206,7 @@
             justify-content: center;
             cursor: pointer;
             user-select: none;
+            touch-action: manipulation;
         }
 
         @media (max-width: 768px) {
@@ -220,6 +222,17 @@
             
             #controls {
                 bottom: 200px;
+                font-size: 14px;
+            }
+            
+            #gameTitle {
+                font-size: 24px;
+                padding: 10px 20px;
+            }
+            
+            #score {
+                font-size: 18px;
+                padding: 8px 16px;
             }
         }
     </style>
@@ -261,10 +274,10 @@
     <script>
         // Configurações do jogo
         const config = {
-            snakeSpeed: 0.08,
-            rotationSpeed: 3,
-            segmentDistance: 0.8,
-            gameAreaSize: 30,
+            snakeSpeed: 0.1,
+            rotationSpeed: 2.5,
+            segmentDistance: 1.0,
+            gameAreaSize: 25,
             initialSegments: 3
         };
 
@@ -279,59 +292,89 @@
         let rotation = 0;
         let lastTime = 0;
         let moveCounter = 0;
-
-        // Shaders WebGL
-        const vertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aColor;
-            uniform mat4 uModelViewMatrix;
-            uniform mat4 uProjectionMatrix;
-            varying vec3 vColor;
-            
-            void main() {
-                gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
-                vColor = aColor;
-            }
-        `;
-
-        const fragmentShaderSource = `
-            precision mediump float;
-            varying vec3 vColor;
-            
-            void main() {
-                gl_FragColor = vec4(vColor, 1.0);
-            }
-        `;
+        let program;
 
         // Inicialização
         function init() {
             canvas = document.getElementById('gameCanvas');
-            gl = canvas.getContext('webgl');
+            
+            // Tenta obter contexto WebGL
+            gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
             
             if (!gl) {
-                alert('WebGL não suportado neste navegador!');
+                alert('WebGL não é suportado neste navegador! Tente usar Chrome, Firefox ou Edge.');
                 return;
             }
 
             // Configura tamanho do canvas
-            canvas.width = canvas.clientWidth;
-            canvas.height = canvas.clientHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
-
-            // Compila shaders
-            const vertexShader = compileShader(gl.VERTEX_SHADER, vertexShaderSource);
-            const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
-            const program = createProgram(vertexShader, fragmentShader);
-            gl.useProgram(program);
-
-            // Configura projeção
-            setupProjection(program);
-
+            resizeCanvas();
+            
+            // Compila shaders e cria programa
+            setupShaders();
+            
+            // Configura WebGL
+            gl.enable(gl.DEPTH_TEST);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            
             // Event listeners
             setupEventListeners();
 
             // Inicia game loop
             requestAnimationFrame(gameLoop);
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('gameContainer');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            
+            if (program) {
+                setupProjection();
+            }
+        }
+
+        function setupShaders() {
+            // Vertex Shader
+            const vsSource = `
+                attribute vec4 aVertexPosition;
+                attribute vec4 aVertexColor;
+                uniform mat4 uModelViewMatrix;
+                uniform mat4 uProjectionMatrix;
+                varying lowp vec4 vColor;
+                
+                void main(void) {
+                    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                    vColor = aVertexColor;
+                }
+            `;
+            
+            // Fragment Shader
+            const fsSource = `
+                varying lowp vec4 vColor;
+                
+                void main(void) {
+                    gl_FragColor = vColor;
+                }
+            `;
+            
+            // Compilar shaders
+            const vertexShader = compileShader(gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fsSource);
+            
+            // Criar programa
+            program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                alert('Erro ao inicializar programa shader: ' + gl.getProgramInfoLog(program));
+                return null;
+            }
+            
+            gl.useProgram(program);
+            setupProjection();
         }
 
         function compileShader(type, source) {
@@ -340,39 +383,28 @@
             gl.compileShader(shader);
             
             if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error('Erro no shader:', gl.getShaderInfoLog(shader));
+                alert('Erro ao compilar shader: ' + gl.getShaderInfoLog(shader));
                 gl.deleteShader(shader);
                 return null;
             }
             return shader;
         }
 
-        function createProgram(vertexShader, fragmentShader) {
-            const program = gl.createProgram();
-            gl.attachShader(program, vertexShader);
-            gl.attachShader(program, fragmentShader);
-            gl.linkProgram(program);
-            
-            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-                console.error('Erro no programa:', gl.getProgramInfoLog(program));
-                return null;
-            }
-            return program;
-        }
-
-        function setupProjection(program) {
+        function setupProjection() {
             const fieldOfView = 45 * Math.PI / 180;
             const aspect = canvas.width / canvas.height;
             const zNear = 0.1;
             const zFar = 100.0;
-            const projectionMatrix = new Float32Array(16);
             
-            const f = 1.0 / Math.tan(fieldOfView / 2);
+            const projectionMatrix = new Float32Array(16);
+            const f = Math.tan(Math.PI * 0.5 - 0.5 * fieldOfView);
+            const rangeInv = 1.0 / (zNear - zFar);
+            
             projectionMatrix[0] = f / aspect;
             projectionMatrix[5] = f;
-            projectionMatrix[10] = (zFar + zNear) / (zNear - zFar);
+            projectionMatrix[10] = (zNear + zFar) * rangeInv;
             projectionMatrix[11] = -1;
-            projectionMatrix[14] = (2 * zFar * zNear) / (zNear - zFar);
+            projectionMatrix[14] = zNear * zFar * rangeInv * 2;
             
             const uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
             gl.uniformMatrix4fv(uProjectionMatrix, false, projectionMatrix);
@@ -383,33 +415,51 @@
             document.addEventListener('keydown', (e) => {
                 if (!gameStarted || gameOver) return;
                 
-                switch(e.key) {
+                switch(e.key.toLowerCase()) {
                     case 'a':
-                    case 'ArrowLeft':
+                    case 'arrowleft':
                         rotation = config.rotationSpeed;
                         break;
                     case 'd':
-                    case 'ArrowRight':
+                    case 'arrowright':
                         rotation = -config.rotationSpeed;
                         break;
                 }
             });
 
             document.addEventListener('keyup', (e) => {
-                if (e.key === 'a' || e.key === 'd' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                const key = e.key.toLowerCase();
+                if (key === 'a' || key === 'd' || key === 'arrowleft' || key === 'arrowright') {
                     rotation = 0;
                 }
             });
 
             // Botões mobile
-            document.getElementById('leftBtn').addEventListener('touchstart', () => rotation = config.rotationSpeed);
-            document.getElementById('leftBtn').addEventListener('touchend', () => rotation = 0);
-            document.getElementById('rightBtn').addEventListener('touchstart', () => rotation = -config.rotationSpeed);
-            document.getElementById('rightBtn').addEventListener('touchend', () => rotation = 0);
+            const leftBtn = document.getElementById('leftBtn');
+            const rightBtn = document.getElementById('rightBtn');
+            
+            leftBtn.addEventListener('mousedown', () => rotation = config.rotationSpeed);
+            leftBtn.addEventListener('mouseup', () => rotation = 0);
+            leftBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                rotation = config.rotationSpeed;
+            });
+            leftBtn.addEventListener('touchend', () => rotation = 0);
+            
+            rightBtn.addEventListener('mousedown', () => rotation = -config.rotationSpeed);
+            rightBtn.addEventListener('mouseup', () => rotation = 0);
+            rightBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                rotation = -config.rotationSpeed;
+            });
+            rightBtn.addEventListener('touchend', () => rotation = 0);
 
             // Botões UI
             document.getElementById('startButton').addEventListener('click', startGame);
             document.getElementById('restartButton').addEventListener('click', restartGame);
+            
+            // Redimensionamento
+            window.addEventListener('resize', resizeCanvas);
         }
 
         function startGame() {
@@ -422,14 +472,15 @@
             // Inicializa cobra
             snake = [];
             for (let i = 0; i < config.initialSegments; i++) {
-                snake.push({ x: 0, y: 0.5, z: -i * config.segmentDistance });
+                snake.push({ 
+                    x: 0, 
+                    y: 0.5, 
+                    z: -i * config.segmentDistance 
+                });
             }
             
             // Posição inicial da comida
             spawnFood();
-            
-            // Configura câmera
-            setupCamera();
         }
 
         function restartGame() {
@@ -438,30 +489,29 @@
         }
 
         function spawnFood() {
-            // Gera comida em posição aleatória
-            const halfSize = config.gameAreaSize / 2 - 2;
-            food.x = Math.random() * halfSize * 2 - halfSize;
-            food.z = Math.random() * halfSize * 2 - halfSize;
-            food.y = 0.5;
-        }
-
-        function setupCamera() {
-            const program = gl.getParameter(gl.CURRENT_PROGRAM);
-            const uModelViewMatrix = gl.getUniformLocation(program, 'uModelViewMatrix');
+            const halfSize = config.gameAreaSize / 2 - 3;
+            let validPosition = false;
+            let attempts = 0;
             
-            // Configura câmera em perspectiva
-            const modelViewMatrix = new Float32Array(16);
-            mat4.lookAt(modelViewMatrix, 
-                [0, 10, 15],  // Posição da câmera
-                [0, 0, 0],    // Para onde olha
-                [0, 1, 0]     // Vetor up
-            );
-            
-            gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
+            while (!validPosition && attempts < 20) {
+                food.x = Math.random() * halfSize * 2 - halfSize;
+                food.z = Math.random() * halfSize * 2 - halfSize;
+                food.y = 0.5;
+                
+                // Verifica se não está em cima da cobra
+                validPosition = true;
+                for (const segment of snake) {
+                    if (distance(food, segment) < 2.0) {
+                        validPosition = false;
+                        break;
+                    }
+                }
+                attempts++;
+            }
         }
 
         function gameLoop(currentTime) {
-            const deltaTime = Math.min((currentTime - lastTime) / 16, 2); // Limita delta time
+            const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
             lastTime = currentTime;
 
             if (gameStarted && !gameOver) {
@@ -484,10 +534,9 @@
 
             // Move a cobra
             moveCounter += deltaTime;
-            if (moveCounter >= config.snakeSpeed * 10) {
+            if (moveCounter >= config.snakeSpeed) {
                 moveCounter = 0;
                 
-                // Nova posição da cabeça
                 const head = snake[0];
                 const newHead = {
                     x: head.x + direction.x,
@@ -496,14 +545,14 @@
                 };
 
                 // Verifica colisão com as paredes
-                if (Math.abs(newHead.x) > config.gameAreaSize / 2 || 
-                    Math.abs(newHead.z) > config.gameAreaSize / 2) {
+                const boundary = config.gameAreaSize / 2;
+                if (Math.abs(newHead.x) > boundary || Math.abs(newHead.z) > boundary) {
                     endGame();
                     return;
                 }
 
                 // Verifica colisão com o próprio corpo
-                for (let i = 1; i < snake.length; i++) {
+                for (let i = 4; i < snake.length; i++) {
                     if (distance(newHead, snake[i]) < 0.8) {
                         endGame();
                         return;
@@ -511,23 +560,23 @@
                 }
 
                 // Verifica se comeu a comida
-                if (distance(newHead, food) < 1.5) {
+                if (distance(newHead, food) < 1.2) {
                     score += 10;
                     updateScore();
                     spawnFood();
-                    // Adiciona novo segmento (não remove a cauda)
+                    // Adiciona segmento sem remover a cauda
                 } else {
-                    // Remove a cauda se não comeu
                     snake.pop();
                 }
 
-                // Adiciona nova cabeça
                 snake.unshift(newHead);
             }
         }
 
         function distance(a, b) {
-            return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
+            const dx = a.x - b.x;
+            const dz = a.z - b.z;
+            return Math.sqrt(dx * dx + dz * dz);
         }
 
         function endGame() {
@@ -541,63 +590,43 @@
         }
 
         function render() {
-            // Limpa o canvas
-            gl.clearColor(0.0, 0.0, 0.0, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-            gl.enable(gl.DEPTH_TEST);
+            
+            // Configura view matrix (câmera)
+            const modelViewMatrix = new Float32Array(16);
+            this.lookAt(modelViewMatrix, [0, 8, 12], [0, 0, 0], [0, 1, 0]);
+            
+            const uModelViewMatrix = gl.getUniformLocation(program, 'uModelViewMatrix');
+            gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
 
             // Renderiza a cobra
             snake.forEach((segment, index) => {
                 const isHead = index === 0;
-                const color = isHead ? [0.0, 1.0, 0.0] : [0.2, 0.8, 0.2]; // Verde
-                drawCube(segment.x, segment.y, segment.z, 0.5, color);
+                const color = isHead ? [0.0, 1.0, 0.0, 1.0] : [0.2, 0.8, 0.2, 1.0];
+                drawCube(segment.x, segment.y, segment.z, 0.4, color);
             });
 
             // Renderiza a comida
-            drawCube(food.x, food.y, food.z, 0.4, [1.0, 0.0, 0.0]); // Vermelho
+            drawCube(food.x, food.y, food.z, 0.3, [1.0, 0.0, 0.0, 1.0]);
 
             // Renderiza o chão
             drawGround();
         }
 
         function drawCube(x, y, z, size, color) {
-            const program = gl.getParameter(gl.CURRENT_PROGRAM);
             const vertices = [
                 // Front face
-                -size + x, -size + y,  size + z,
-                 size + x, -size + y,  size + z,
-                 size + x,  size + y,  size + z,
-                -size + x,  size + y,  size + z,
-                
+                -size + x, -size + y,  size + z,  size + x, -size + y,  size + z,  size + x,  size + y,  size + z, -size + x,  size + y,  size + z,
                 // Back face
-                -size + x, -size + y, -size + z,
-                -size + x,  size + y, -size + z,
-                 size + x,  size + y, -size + z,
-                 size + x, -size + y, -size + z,
-                
+                -size + x, -size + y, -size + z, -size + x,  size + y, -size + z,  size + x,  size + y, -size + z,  size + x, -size + y, -size + z,
                 // Top face
-                -size + x,  size + y, -size + z,
-                -size + x,  size + y,  size + z,
-                 size + x,  size + y,  size + z,
-                 size + x,  size + y, -size + z,
-                
+                -size + x,  size + y, -size + z, -size + x,  size + y,  size + z,  size + x,  size + y,  size + z,  size + x,  size + y, -size + z,
                 // Bottom face
-                -size + x, -size + y, -size + z,
-                 size + x, -size + y, -size + z,
-                 size + x, -size + y,  size + z,
-                -size + x, -size + y,  size + z,
-                
+                -size + x, -size + y, -size + z,  size + x, -size + y, -size + z,  size + x, -size + y,  size + z, -size + x, -size + y,  size + z,
                 // Right face
-                 size + x, -size + y, -size + z,
-                 size + x,  size + y, -size + z,
-                 size + x,  size + y,  size + z,
-                 size + x, -size + y,  size + z,
-                
+                 size + x, -size + y, -size + z,  size + x,  size + y, -size + z,  size + x,  size + y,  size + z,  size + x, -size + y,  size + z,
                 // Left face
-                -size + x, -size + y, -size + z,
-                -size + x, -size + y,  size + z,
-                -size + x,  size + y,  size + z,
-                -size + x,  size + y, -size + z,
+                -size + x, -size + y, -size + z, -size + x, -size + y,  size + z, -size + x,  size + y,  size + z, -size + x,  size + y, -size + z,
             ];
 
             const colors = [];
@@ -608,9 +637,9 @@
             }
 
             const indices = [
-                0, 1, 2, 0, 2, 3,    // front
-                4, 5, 6, 4, 6, 7,    // back
-                8, 9, 10, 8, 10, 11,  // top
+                0, 1, 2, 0, 2, 3,       // front
+                4, 5, 6, 4, 6, 7,       // back
+                8, 9, 10, 8, 10, 11,    // top
                 12, 13, 14, 12, 14, 15, // bottom
                 16, 17, 18, 16, 18, 19, // right
                 20, 21, 22, 20, 22, 23  // left
@@ -622,44 +651,38 @@
         function drawGround() {
             const size = config.gameAreaSize;
             const vertices = [
-                -size, 0, -size,
-                 size, 0, -size,
-                 size, 0,  size,
-                -size, 0,  size,
+                -size, 0, -size,  size, 0, -size,  size, 0,  size, -size, 0,  size
             ];
 
             const colors = [
-                0.3, 0.3, 0.3,
-                0.3, 0.3, 0.3,
-                0.3, 0.3, 0.3,
-                0.3, 0.3, 0.3,
+                0.1, 0.1, 0.1, 1.0,
+                0.1, 0.1, 0.1, 1.0,
+                0.1, 0.1, 0.1, 1.0,
+                0.1, 0.1, 0.1, 1.0
             ];
 
             const indices = [0, 1, 2, 0, 2, 3];
-
             drawGeometry(vertices, colors, indices);
         }
 
         function drawGeometry(vertices, colors, indices) {
-            const program = gl.getParameter(gl.CURRENT_PROGRAM);
-            
             // Buffer de vértices
             const vertexBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
             
-            const aPosition = gl.getAttribLocation(program, 'aPosition');
-            gl.enableVertexAttribArray(aPosition);
-            gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+            const positionAttributeLocation = gl.getAttribLocation(program, "aVertexPosition");
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
 
             // Buffer de cores
             const colorBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
             
-            const aColor = gl.getAttribLocation(program, 'aColor');
-            gl.enableVertexAttribArray(aColor);
-            gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+            const colorAttributeLocation = gl.getAttribLocation(program, "aVertexColor");
+            gl.enableVertexAttribArray(colorAttributeLocation);
+            gl.vertexAttribPointer(colorAttributeLocation, 4, gl.FLOAT, false, 0, 0);
 
             // Buffer de índices
             const indexBuffer = gl.createBuffer();
@@ -670,69 +693,41 @@
             gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
         }
 
-        // Biblioteca de matrizes simples
-        const mat4 = {
-            lookAt: function(out, eye, center, up) {
-                let x0, x1, x2, y0, y1, y2, z0, z1, z2, len;
-                let eyex = eye[0], eyey = eye[1], eyez = eye[2];
-                let upx = up[0], upy = up[1], upz = up[2];
-                let centerx = center[0], centery = center[1], centerz = center[2];
+        // Função lookAt simplificada
+        function lookAt(out, eye, center, up) {
+            const eyex = eye[0], eyey = eye[1], eyez = eye[2];
+            const upx = up[0], upy = up[1], upz = up[2];
+            const centerx = center[0], centery = center[1], centerz = center[2];
 
-                z0 = eyex - centerx;
-                z1 = eyey - centery;
-                z2 = eyez - centerz;
+            let z0 = eyex - centerx, z1 = eyey - centery, z2 = eyez - centerz;
+            let len = 1 / Math.sqrt(z0 * z0 + z1 * z1 + z2 * z2);
+            z0 *= len; z1 *= len; z2 *= len;
 
-                len = 1 / Math.sqrt(z0 * z0 + z1 * z1 + z2 * z2);
-                z0 *= len;
-                z1 *= len;
-                z2 *= len;
-
-                x0 = upy * z2 - upz * z1;
-                x1 = upz * z0 - upx * z2;
-                x2 = upx * z1 - upy * z0;
-                
-                len = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
-                if (!len) {
-                    x0 = 0; x1 = 0; x2 = 0;
-                } else {
-                    len = 1 / len;
-                    x0 *= len; x1 *= len; x2 *= len;
-                }
-
-                y0 = z1 * x2 - z2 * x1;
-                y1 = z2 * x0 - z0 * x2;
-                y2 = z0 * x1 - z1 * x0;
-
-                len = Math.sqrt(y0 * y0 + y1 * y1 + y2 * y2);
-                if (!len) {
-                    y0 = 0; y1 = 0; y2 = 0;
-                } else {
-                    len = 1 / len;
-                    y0 *= len; y1 *= len; y2 *= len;
-                }
-
-                out[0] = x0; out[1] = y0; out[2] = z0; out[3] = 0;
-                out[4] = x1; out[5] = y1; out[6] = z1; out[7] = 0;
-                out[8] = x2; out[9] = y2; out[10] = z2; out[11] = 0;
-                out[12] = -(x0 * eyex + x1 * eyey + x2 * eyez);
-                out[13] = -(y0 * eyex + y1 * eyey + y2 * eyez);
-                out[14] = -(z0 * eyex + z1 * eyey + z2 * eyez);
-                out[15] = 1;
+            let x0 = upy * z2 - upz * z1, x1 = upz * z0 - upx * z2, x2 = upx * z1 - upy * z0;
+            len = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
+            if (len) {
+                len = 1 / len;
+                x0 *= len; x1 *= len; x2 *= len;
             }
-        };
+
+            let y0 = z1 * x2 - z2 * x1, y1 = z2 * x0 - z0 * x2, y2 = z0 * x1 - z1 * x0;
+            len = Math.sqrt(y0 * y0 + y1 * y1 + y2 * y2);
+            if (len) {
+                len = 1 / len;
+                y0 *= len; y1 *= len; y2 *= len;
+            }
+
+            out[0] = x0; out[1] = y0; out[2] = z0; out[3] = 0;
+            out[4] = x1; out[5] = y1; out[6] = z1; out[7] = 0;
+            out[8] = x2; out[9] = y2; out[10] = z2; out[11] = 0;
+            out[12] = -(x0 * eyex + x1 * eyey + x2 * eyez);
+            out[13] = -(y0 * eyex + y1 * eyey + y2 * eyez);
+            out[14] = -(z0 * eyex + z1 * eyey + z2 * eyez);
+            out[15] = 1;
+        }
 
         // Inicia o jogo quando a página carregar
         window.addEventListener('load', init);
-        
-        // Redimensiona o canvas quando a janela mudar de tamanho
-        window.addEventListener('resize', () => {
-            if (canvas) {
-                canvas.width = canvas.clientWidth;
-                canvas.height = canvas.clientHeight;
-                gl.viewport(0, 0, canvas.width, canvas.height);
-                setupProjection(gl.getParameter(gl.CURRENT_PROGRAM));
-            }
-        });
     </script>
 </body>
 </html>
