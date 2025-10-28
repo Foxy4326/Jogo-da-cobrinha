@@ -32,6 +32,7 @@
             border-radius: 15px;
             box-shadow: 0 0 30px rgba(0, 255, 0, 0.4);
             overflow: hidden;
+            display: none;
         }
 
         #gameCanvas {
@@ -39,6 +40,99 @@
             height: 100%;
             display: block;
             background: #000000;
+        }
+
+        #loginScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 20px;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+            width: 90%;
+            max-width: 400px;
+        }
+
+        #loginScreen h1 {
+            color: #00ff00;
+            font-size: 36px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #00ff00;
+        }
+
+        #loginScreen p {
+            font-size: 16px;
+            margin: 15px 0;
+            color: #cccccc;
+        }
+
+        #userInfo {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 10px;
+            border: 1px solid #00ff00;
+            display: none;
+        }
+
+        #userAvatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 10px auto;
+            border: 2px solid #00ff00;
+        }
+
+        #userName {
+            font-size: 18px;
+            color: #00ff00;
+            margin: 10px 0;
+        }
+
+        #userEmail {
+            font-size: 14px;
+            color: #cccccc;
+        }
+
+        .login-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .login-btn:hover {
+            background: #3367d6;
+            transform: scale(1.05);
+        }
+
+        .login-btn img {
+            width: 20px;
+            height: 20px;
+        }
+
+        #logoutBtn {
+            background: #ea4335;
+            margin-top: 10px;
+        }
+
+        #logoutBtn:hover {
+            background: #d33426;
         }
 
         #uiOverlay {
@@ -64,16 +158,40 @@
             border: 2px solid #00ff00;
         }
 
+        #userDisplay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 15px;
+            border-radius: 10px;
+            border: 2px solid #00ff00;
+        }
+
+        #userDisplay img {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+        }
+
+        #userDisplay span {
+            color: #00ff00;
+            font-size: 14px;
+        }
+
         #gameTitle {
             position: absolute;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 32px;
+            font-size: 28px;
             color: #00ff00;
             text-shadow: 0 0 15px #00ff00;
             background: rgba(0, 0, 0, 0.8);
-            padding: 15px 30px;
+            padding: 10px 25px;
             border-radius: 15px;
             border: 2px solid #00ff00;
         }
@@ -91,15 +209,15 @@
             box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
         }
 
-        #startScreen h1 {
+        #startScreen h2 {
             color: #00ff00;
-            font-size: 48px;
+            font-size: 32px;
             margin-bottom: 20px;
             text-shadow: 0 0 20px #00ff00;
         }
 
         #startScreen p {
-            font-size: 18px;
+            font-size: 16px;
             margin: 10px 0;
             color: #cccccc;
         }
@@ -109,7 +227,7 @@
             color: black;
             border: none;
             padding: 15px 40px;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             border-radius: 10px;
             cursor: pointer;
@@ -155,7 +273,7 @@
             color: white;
             border: none;
             padding: 15px 40px;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             border-radius: 10px;
             cursor: pointer;
@@ -180,7 +298,7 @@
             border-radius: 10px;
             border: 2px solid #00ff00;
             color: #00ff00;
-            font-size: 16px;
+            font-size: 14px;
         }
 
         .mobile-controls {
@@ -194,13 +312,13 @@
         }
 
         .control-btn {
-            width: 80px;
-            height: 80px;
+            width: 70px;
+            height: 70px;
             background: rgba(0, 255, 0, 0.3);
             border: 2px solid #00ff00;
             border-radius: 50%;
             color: white;
-            font-size: 24px;
+            font-size: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -221,32 +339,62 @@
             }
             
             #controls {
-                bottom: 200px;
-                font-size: 14px;
+                bottom: 180px;
+                font-size: 12px;
             }
             
             #gameTitle {
-                font-size: 24px;
-                padding: 10px 20px;
+                font-size: 20px;
+                padding: 8px 16px;
             }
             
-            #score {
-                font-size: 18px;
-                padding: 8px 16px;
+            #score, #userDisplay {
+                font-size: 14px;
+                padding: 6px 12px;
             }
         }
     </style>
 </head>
 <body>
+    <!-- Tela de Login -->
+    <div id="loginScreen">
+        <h1>🐍 SNAKE 3D 🐍</h1>
+        <p>Faça login para jogar e salvar sua pontuação!</p>
+        
+        <div id="userInfo">
+            <img id="userAvatar" src="" alt="Avatar">
+            <div id="userName"></div>
+            <div id="userEmail"></div>
+        </div>
+        
+        <button id="googleLogin" class="login-btn">
+            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIj48cGF0aCBkPSJNMTcuNiA5LjJsLS4xLTEuOEg5djMuNGg0LjhDMTMuNiAxMiAxMyAxMyAxMiAxMy42djIuMmgzYTguOCA4LjggMCAwIDAgMi42LTYuNnoiIGZpbGw9IiM0Mjg1RjQiIGZpbGwtcnVsZT0ibm9uemVybyIvPjxwYXRoIGQ9Ik05IDE4YzIuNCAwIDQuNS0uOCA2LTIuMmwtMy0yLjJhNS40IDUuNCAwIDAgMS04LTIuOUgxVjEzYTkgOSAwIDAgMCA4IDV6IiBmaWxsPSIjMzRBODUzIiBmaWxsLXJ1bGU9Im5vbnplcm8iLz48cGF0aCBkPSJNNCAxMC43YTUuNCA1LjQgMCAwIDEgMC0zLjRWNUgxYTkgOSAwIDAgMCAwIDhsMy0yLjN6IiBmaWxsPSIjRkJCQzA1IiBmaWxsLXJ1bGU9Im5vbnplcm8iLz48cGF0aCBkPSJNOSAzLjZjMS4zIDAgMi41LjQgMy40IDEuM0wxNSAyLjNBOSA5IDAgMCAwIDEgNWwzIDIuNGE1LjQgNS40IDAgMCAxIDUtMy43eiIgZmlsbD0iI0VBNDMzNSIgZmlsbC1ydWxlPSJub256ZXJvIi8+PHBhdGggZD0iTTAgMGgxOHYxOEgweiIvPjwvZz48L3N2Zz4=" alt="Google">
+            Entrar com Google
+        </button>
+        
+        <button id="logoutBtn" class="login-btn" style="display: none;">
+            Sair
+        </button>
+        
+        <p style="margin-top: 20px; font-size: 12px; color: #888;">
+            Sua pontuação será salva automaticamente
+        </p>
+    </div>
+
+    <!-- Container do Jogo -->
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
         
         <div id="uiOverlay">
             <div id="score">Score: 0</div>
+            <div id="userDisplay" style="display: none;">
+                <img id="displayAvatar" src="" alt="Avatar">
+                <span id="displayName"></span>
+            </div>
             <div id="gameTitle">🐍 SNAKE 3D 🐍</div>
             
             <div id="startScreen">
-                <h1>SNAKE 3D</h1>
+                <h2>Bem-vindo, <span id="welcomeName"></span>!</h2>
                 <p>🎮 Controle a cobra e colete a comida!</p>
                 <p>⬅️➡️ Use A/D ou setas para girar</p>
                 <p>🚫 Evite bater no próprio corpo!</p>
@@ -256,7 +404,7 @@
             <div id="gameOverScreen">
                 <h2>GAME OVER</h2>
                 <div id="finalScore">Score: 0</div>
-                <p>Tente novamente!</p>
+                <p id="highScoreMessage"></p>
                 <button id="restartButton">JOGAR NOVAMENTE</button>
             </div>
             
@@ -271,7 +419,27 @@
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+
     <script>
+        // Configuração do Firebase (substitua com suas credenciais)
+        const firebaseConfig = {
+            apiKey: "AIzaSyC4mJ6g7V6X6X6X6X6X6X6X6X6X6X6X6X6X6X6",
+            authDomain: "snake-3d-game.firebaseapp.com",
+            projectId: "snake-3d-game",
+            storageBucket: "snake-3d-game.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef123456"
+        };
+
+        // Inicializa Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
         // Configurações do jogo
         const config = {
             snakeSpeed: 0.1,
@@ -287,15 +455,121 @@
         let food = { x: 0, y: 0.5, z: 0 };
         let direction = { x: 0, y: 0, z: 1 };
         let score = 0;
+        let highScore = 0;
         let gameStarted = false;
         let gameOver = false;
         let rotation = 0;
         let lastTime = 0;
         let moveCounter = 0;
         let program;
+        let currentUser = null;
 
-        // Inicialização
-        function init() {
+        // Sistema de Autenticação
+        function initAuth() {
+            // Observador de estado de autenticação
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    // Usuário logado
+                    currentUser = user;
+                    showUserInfo(user);
+                    showGameInterface();
+                    loadUserHighScore(user.uid);
+                } else {
+                    // Usuário não logado
+                    currentUser = null;
+                    showLoginScreen();
+                }
+            });
+
+            // Event listeners para botões de login/logout
+            document.getElementById('googleLogin').addEventListener('click', signInWithGoogle);
+            document.getElementById('logoutBtn').addEventListener('click', signOut);
+        }
+
+        async function signInWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.addScope('profile');
+            provider.addScope('email');
+            
+            try {
+                await auth.signInWithPopup(provider);
+            } catch (error) {
+                console.error('Erro no login:', error);
+                alert('Erro ao fazer login: ' + error.message);
+            }
+        }
+
+        function signOut() {
+            auth.signOut();
+        }
+
+        function showUserInfo(user) {
+            const userInfo = document.getElementById('userInfo');
+            const userName = document.getElementById('userName');
+            const userEmail = document.getElementById('userEmail');
+            const userAvatar = document.getElementById('userAvatar');
+            const logoutBtn = document.getElementById('logoutBtn');
+
+            userName.textContent = user.displayName || 'Usuário';
+            userEmail.textContent = user.email;
+            userAvatar.src = user.photoURL || 'https://via.placeholder.com/60';
+            
+            userInfo.style.display = 'block';
+            logoutBtn.style.display = 'block';
+            document.getElementById('googleLogin').style.display = 'none';
+        }
+
+        function showLoginScreen() {
+            document.getElementById('loginScreen').style.display = 'block';
+            document.getElementById('gameContainer').style.display = 'none';
+            document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'none';
+            document.getElementById('googleLogin').style.display = 'block';
+        }
+
+        function showGameInterface() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            
+            // Atualiza informações do usuário no jogo
+            if (currentUser) {
+                document.getElementById('welcomeName').textContent = currentUser.displayName || 'Jogador';
+                document.getElementById('displayName').textContent = currentUser.displayName || 'Jogador';
+                document.getElementById('displayAvatar').src = currentUser.photoURL || 'https://via.placeholder.com/30';
+                document.getElementById('userDisplay').style.display = 'flex';
+            }
+        }
+
+        async function loadUserHighScore(userId) {
+            try {
+                const doc = await db.collection('highscores').doc(userId).get();
+                if (doc.exists) {
+                    highScore = doc.data().score || 0;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar high score:', error);
+            }
+        }
+
+        async function saveUserHighScore(userId, score) {
+            if (score <= highScore) return;
+            
+            try {
+                highScore = score;
+                await db.collection('highscores').doc(userId).set({
+                    score: score,
+                    name: currentUser.displayName || 'Anônimo',
+                    email: currentUser.email,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('High score salvo:', score);
+            } catch (error) {
+                console.error('Erro ao salvar high score:', error);
+            }
+        }
+
+        // Inicialização do Jogo
+        function initGame() {
             canvas = document.getElementById('gameCanvas');
             
             // Tenta obter contexto WebGL
@@ -316,8 +590,8 @@
             gl.enable(gl.DEPTH_TEST);
             gl.clearColor(0.0, 0.0, 0.0, 1.0);
             
-            // Event listeners
-            setupEventListeners();
+            // Event listeners do jogo
+            setupGameEventListeners();
 
             // Inicia game loop
             requestAnimationFrame(gameLoop);
@@ -410,7 +684,7 @@
             gl.uniformMatrix4fv(uProjectionMatrix, false, projectionMatrix);
         }
 
-        function setupEventListeners() {
+        function setupGameEventListeners() {
             // Teclado
             document.addEventListener('keydown', (e) => {
                 if (!gameStarted || gameOver) return;
@@ -454,7 +728,7 @@
             });
             rightBtn.addEventListener('touchend', () => rotation = 0);
 
-            // Botões UI
+            // Botões UI do jogo
             document.getElementById('startButton').addEventListener('click', startGame);
             document.getElementById('restartButton').addEventListener('click', restartGame);
             
@@ -581,7 +855,24 @@
 
         function endGame() {
             gameOver = true;
+            
+            // Salva high score se for maior
+            if (currentUser && score > highScore) {
+                saveUserHighScore(currentUser.uid, score);
+            }
+            
             document.getElementById('finalScore').textContent = `Score: ${score}`;
+            
+            // Mensagem de high score
+            const highScoreMessage = document.getElementById('highScoreMessage');
+            if (score > highScore) {
+                highScoreMessage.textContent = `🎉 Novo Recorde! High Score: ${score}`;
+                highScoreMessage.style.color = '#00ff00';
+            } else {
+                highScoreMessage.textContent = `High Score: ${highScore}`;
+                highScoreMessage.style.color = '#cccccc';
+            }
+            
             document.getElementById('gameOverScreen').style.display = 'block';
         }
 
@@ -726,8 +1017,11 @@
             out[15] = 1;
         }
 
-        // Inicia o jogo quando a página carregar
-        window.addEventListener('load', init);
+        // Inicialização quando a página carrega
+        window.addEventListener('load', () => {
+            initAuth();
+            initGame();
+        });
     </script>
 </body>
 </html>
